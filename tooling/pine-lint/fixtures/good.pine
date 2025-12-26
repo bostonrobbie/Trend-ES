@@ -1,0 +1,16 @@
+//@version=5
+strategy("Fixture Good", overlay=true)
+
+var myState = 0
+
+f_updateState(x) =>
+    myState := nz(myState) + x
+
+length = input.int(10, "Length")
+source = close
+basis = ta.sma(source, length)
+
+if ta.crossover(source, basis)
+    strategy.entry("Long", strategy.long)
+
+plot(basis, title="Basis")
