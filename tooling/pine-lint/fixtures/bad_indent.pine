@@ -1,0 +1,5 @@
+//@version=6
+strategy("Bad Indent", overlay=true)
+
+if barstate.isconfirmed
+  plot(close)

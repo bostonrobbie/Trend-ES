@@ -1,0 +1,10 @@
+//@version=6
+strategy("Bad Global Mutation", overlay=true)
+
+var counter = 0
+
+bump() =>
+    counter := counter + 1
+
+bump()
+plot(counter)

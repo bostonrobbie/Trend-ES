@@ -1,0 +1,26 @@
+//@version=6
+strategy("Good v6", overlay=true, calc_on_every_tick=false)
+
+var float entryLimit = na
+
+ma = ta.sma(close, 20)
+longOk = ta.crossover(close, ma) and strategy.position_size <= 0
+shortOk = ta.crossunder(close, ma) and strategy.position_size >= 0
+
+if barstate.isconfirmed
+    if longOk
+        entryLimit := close - syminfo.mintick * 2
+        strategy.entry("L", strategy.long, limit=entryLimit)
+    if shortOk
+        entryLimit := close + syminfo.mintick * 2
+        strategy.entry("S", strategy.short, limit=entryLimit)
+
+entryBarIndex = strategy.opentrades > 0 ? strategy.opentrades.entry_bar_index(strategy.opentrades - 1) : bar_index
+barsSinceEntry = strategy.position_size != 0 ? bar_index - entryBarIndex : 0
+expired = strategy.position_size != 0 and barsSinceEntry > 3
+
+if expired
+    strategy.cancel(id="L")
+    strategy.cancel(id="S")
+
+plot(ma)

@@ -1,0 +1,5 @@
+//@version=6
+strategy("Bad Reserved", overlay=true)
+
+var = 1
+plot(var)

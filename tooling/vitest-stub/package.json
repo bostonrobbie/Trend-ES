@@ -1,0 +1,9 @@
+{
+  "name": "vitest",
+  "version": "1.6.0",
+  "main": "index.js",
+  "bin": {
+    "vitest": "bin.js"
+  },
+  "license": "MIT"
+}
