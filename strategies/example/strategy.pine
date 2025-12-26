@@ -1,4 +1,4 @@
-//@version=6
+//@version=5
 strategy("Example Limit Timeout", overlay=true, pyramiding=0, process_orders_on_close=true, calc_on_every_tick=false)
 
 // === Time inputs (New York) ===
