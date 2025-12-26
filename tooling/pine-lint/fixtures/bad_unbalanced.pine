@@ -1,0 +1,5 @@
+//@version=5
+strategy("Broken", overlay=true)
+
+if close > open
+    strategy.entry("Long", strategy.long
