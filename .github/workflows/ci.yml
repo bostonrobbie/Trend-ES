@@ -2,33 +2,27 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
   pull_request:
 
 jobs:
-  lint-and-test:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
+      - uses: actions/checkout@v4
+      - name: Use Node LTS
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Run pine-lint (JSON report)
-        run: |
-          node tooling/pine-lint/index.js lint 'strategies/**/*.pine' --format json > lint-report.json
-
-      - name: Run pine-lint (text)
-        run: node tooling/pine-lint/index.js lint 'strategies/**/*.pine'
-
+      - name: Install dependencies
+        run: npm ci
       - name: Run tests
         run: npm test
-
+      - name: Lint Pine scripts
+        run: npm run lint:pine
+      - name: Generate JSON lint report
+        run: node tooling/pine-lint/index.js lint "strategies/**/*.pine" --format json > pine-lint-report.json
       - name: Upload lint report
         uses: actions/upload-artifact@v4
         with:
           name: pine-lint-report
-          path: lint-report.json
+          path: pine-lint-report.json

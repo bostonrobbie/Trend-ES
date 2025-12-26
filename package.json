@@ -1,24 +1,27 @@
 {
-  "name": "pine-strategy-template",
+  "name": "pine-v6-strategy-template",
   "version": "1.0.0",
-  "description": "Template repository for TradingView Pine Script strategies with pine-lint CLI and CI.",
+  "description": "TradingView Pine Script v6 strategy template with offline pine-lint and CI.",
   "main": "tooling/pine-lint/index.js",
   "bin": {
     "pine-lint": "tooling/pine-lint/index.js"
   },
   "scripts": {
-    "lint:pine": "node tooling/pine-lint/index.js lint 'strategies/**/*.pine'",
-    "test": "node tooling/pine-lint/test/run-tests.js"
+    "lint:pine": "node tooling/pine-lint/index.js lint \"strategies/**/*.pine\"",
+    "test": "vitest run"
   },
   "keywords": [
     "pine",
     "tradingview",
     "strategy",
     "lint",
-    "template"
+    "template",
+    "v6"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "vitest": "^1.6.0"
+  }
 }

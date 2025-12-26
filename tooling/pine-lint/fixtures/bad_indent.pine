@@ -1,5 +1,5 @@
-//@version=5
-strategy("Indent", overlay=true)
+//@version=6
+strategy("Bad Indent", overlay=true)
 
-if close > open
-   strategy.entry("Long", strategy.long)
+if barstate.isconfirmed
+  plot(close)

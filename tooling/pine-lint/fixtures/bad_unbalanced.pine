@@ -1,5 +1,4 @@
-//@version=5
-strategy("Broken", overlay=true)
+//@version=6
+strategy("Bad Unbalanced", overlay=true)
 
-if close > open
-    strategy.entry("Long", strategy.long
+plot(close

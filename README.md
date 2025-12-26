@@ -1,55 +1,66 @@
-# TradingView Pine Script Strategy Template
+# TradingView Pine v6 Strategy Template
 
-This repository is a reusable template for building TradingView Pine Script strategies with automated linting that mirrors the Pine Editor's strictness as closely as possible without using TradingView's compiler.
+Offline, CI-ready template for TradingView Pine Script **v6** strategies. Each strategy lives in its own folder with a single copy/paste-ready `.pine` file, and the bundled `pine-lint` CLI enforces Pine Editor-like rules, limit-order-first discipline, and common compile foot-guns.
 
-- **Strategies** live under `./strategies/<strategy_name>/<strategy_name>.pine` with a per-strategy README.
-- **pine-lint** is a local CLI that performs static checks for common Pine Script compile errors and logical foot-guns.
-- **CI** runs pine-lint and its unit tests on every push and pull request, failing builds on errors and publishing a JSON report artifact.
+## Quickstart
+1. Install dependencies (Node LTS):
+   ```bash
+   npm ci
+   ```
+2. Run the linter against all strategies:
+   ```bash
+   npm run lint:pine
+   ```
+3. Run unit tests (vitest):
+   ```bash
+   npm test
+   ```
+4. Copy `strategies/example_v6/example_v6.pine` into TradingView to start building your own strategy.
 
-## Quick start
-
-1. Install Node.js LTS (18+ recommended). `pnpm` or `npm` both work.
-2. Install dependencies:
-   - `pnpm install` (preferred) or `npm install`.
-3. Run lint across all strategies:
-   - `pnpm lint:pine` (or `npm run lint:pine`).
-4. Run linter unit tests (uses a bundled light-weight Vitest-compatible harness, no network fetches):
-   - `pnpm test` (or `npm test`).
-
-## Repository layout
-
+## Linter usage
 ```
-/strategies/<strategy_name>/<strategy_name>.pine   # Pine source files
-/tooling/pine-lint/                                # CLI implementation, fixtures, tests
-/.github/workflows/ci.yml                          # CI workflow for lint + tests
+node tooling/pine-lint/index.js lint "strategies/**/*.pine" [--format json] [--config path]
 ```
+- Text output: `file:line:col - [ERROR|WARN] CODE - message`
+- JSON output: array of `{file,line,col,severity,code,message}`
+- Default config: `tooling/pine-lint/index.js` (overrides via `.pinelintrc.json`)
 
-## pine-lint overview
+Key checks include:
+- `//@version=6` on the first non-empty line and exactly one `strategy()`/`indicator()` declaration.
+- Balanced delimiters and end-of-line continuation traps (dangling operators, commas, open delimiters).
+- 4-space indentation heuristics for block scopes.
+- Reserved identifier misuse, global var mutation inside functions, plotting in local scopes.
+- `request.security` lookahead enforcement and repaint warnings.
+- Strategy entry guardrails: limit-order requirement, anti-spam gating heuristics, and cancel/timeout expectations.
+- Overfitting guardrails: input count, nested loops, long argument lists.
 
-`pine-lint` is a fast static checker designed to catch the most common Pine Editor errors before you paste code into TradingView. It enforces file hygiene, Pine version headers, top-level declarations, balanced delimiters, indentation heuristics, and patterns such as `request.security` lookahead, risky `strategy.entry` triggers, and overfitting guardrails. The CLI supports human-friendly and JSON output formats.
-
-See [`tooling/pine-lint/rules.md`](tooling/pine-lint/rules.md) for the full rule set.
-
-## Adding strategies
-
-1. Create a folder under `strategies/` (e.g., `strategies/my_strategy/`).
-2. Add your Pine file named the same as the folder (`my_strategy.pine`).
-3. Add a short `README.md` describing the idea and inputs.
-4. Run `pnpm lint:pine` to catch issues before committing.
-
-## Local configuration
-
-You can tune thresholds and behavior with `.pinelintrc.json` in the repo root. Example:
-
+## Config overrides
+Create `.pinelintrc.json` in the repo root (or pass `--config`) to override defaults:
 ```json
 {
-  "maxInputs": 50,
-  "maxRequestSecurity": 30,
-  "maxLineLength": 140,
-  "disallowLookahead": true
+  "requiredVersion": 6,
+  "disallowLookaheadOn": true,
+  "requireLimitOrders": true,
+  "maxInputs": 40,
+  "maxRequestSecurity": 20,
+  "maxLineLength": 120,
+  "enforceOneInputPerLine": true,
+  "enforceNoTabs": true,
+  "enforce4SpaceIndent": true,
+  "disallowCalcOnEveryTick": true
 }
 ```
 
 ## CI
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
+- `npm ci`
+- `npm test`
+- `npm run lint:pine`
+- `node tooling/pine-lint/index.js lint "strategies/**/*.pine" --format json > pine-lint-report.json`
+- Uploads `pine-lint-report.json` as an artifact and fails on any errors.
 
-GitHub Actions executes linting and tests on push and pull requests. Lint results are uploaded as a JSON artifact for further inspection.
+## Creating a new strategy
+1. Copy `strategies/example_v6` to `strategies/<your_strategy>`.
+2. Update the `.pine` file but keep `//@version=6` on the first non-empty line and ensure the first declaration is `strategy()`/`indicator()`.
+3. Use limit orders with cancel/timeout logic by default to satisfy the linter guardrails.
+4. Run `npm run lint:pine` and `npm test` before committing.

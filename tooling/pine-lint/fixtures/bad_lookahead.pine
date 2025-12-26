@@ -1,5 +1,5 @@
-//@version=5
-strategy("Lookahead", overlay=true)
+//@version=6
+strategy("Bad Lookahead", overlay=true)
 
 x = request.security(syminfo.tickerid, "D", close, lookahead=barmerge.lookahead_on)
 plot(x)
