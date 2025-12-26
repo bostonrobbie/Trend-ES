@@ -7,6 +7,7 @@ Offline, CI-ready template for TradingView Pine Script **v6** strategies. Each s
    ```bash
    npm ci
    ```
+   > Note: the repo ships a tiny local `vitest` stub so installs work fully offline (no vendored `node_modules/`).
 2. Run the linter against all strategies:
    ```bash
    npm run lint:pine
@@ -16,6 +17,26 @@ Offline, CI-ready template for TradingView Pine Script **v6** strategies. Each s
    npm test
    ```
 4. Copy `strategies/example_v6/example_v6.pine` into TradingView to start building your own strategy.
+
+## Create a new strategy
+Use the scaffold generator to create a Pine v6, limit-order-first strategy folder with a copy/paste-ready `.pine` file:
+
+```bash
+node tooling/new-strategy/index.js create <strategy_name>
+# example:
+node tooling/new-strategy/index.js create es-orb-gap
+```
+
+Rules:
+- Strategy name must use lowercase letters, numbers, and hyphens only.
+- Files are created in `strategies/<strategy_name>/` and will not be overwritten unless you pass `--force`.
+- Generated scripts include bar-close gating, limit order offsets, cancel/timeout handling, per-day trade caps, and a pane-lock plot.
+
+After generation, edit the strategy, then run:
+```bash
+npm test
+npm run lint:pine
+```
 
 ## Linter usage
 ```
@@ -59,7 +80,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
 - `node tooling/pine-lint/index.js lint "strategies/**/*.pine" --format json > pine-lint-report.json`
 - Uploads `pine-lint-report.json` as an artifact and fails on any errors.
 
-## Creating a new strategy
+## Creating a new strategy manually
 1. Copy `strategies/example_v6` to `strategies/<your_strategy>`.
 2. Update the `.pine` file but keep `//@version=6` on the first non-empty line and ensure the first declaration is `strategy()`/`indicator()`.
 3. Use limit orders with cancel/timeout logic by default to satisfy the linter guardrails.

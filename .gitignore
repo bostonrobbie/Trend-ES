@@ -1,5 +1,7 @@
-node_modules
+node_modules/
+dist/
+coverage/
+*.log
 npm-debug.log*
 pine-lint-report.json
-coverage
 .DS_Store

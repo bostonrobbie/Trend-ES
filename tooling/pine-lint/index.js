@@ -191,7 +191,7 @@ function lintContent(content, config) {
   let hasCancelPattern = false;
   let sawStrategyEntry = false;
   const globalVars = new Set();
-  const functionStack = [];
+    let functionIndent = null;
   const loopStack = [];
   let previousIndent = 0;
   let previousLineWasBlock = false;
@@ -322,8 +322,10 @@ function lintContent(content, config) {
       });
     }
 
-    const reservedRegex = new RegExp(`^(?:var\s+)?(${RESERVED_IDENTIFIERS.join('|')})\b\s*(?::=|=)`);
-    if (reservedRegex.test(trimmed) && !/\./.test(trimmed.split(/:=|=/)[0])) {
+    const assignMatch =
+      trimmed.match(/^([A-Za-z_]\w*)\b\s*(?::=|=)/) || trimmed.match(/^var\s+([A-Za-z_]\w*)\b\s*(?::=|=)/);
+    const assignedName = assignMatch ? assignMatch[1] : null;
+    if (assignedName && RESERVED_IDENTIFIERS.includes(assignedName) && !/\./.test(trimmed.split(/:=|=/)[0])) {
       addIssue(issues, {
         line: lineNumber,
         col: 1,
@@ -333,15 +335,13 @@ function lintContent(content, config) {
       });
     }
 
-    while (functionStack.length && indent <= functionStack[functionStack.length - 1].indent) {
-      functionStack.pop();
-    }
-
     const functionStart = /^\s*[A-Za-z_]\w*\s*\([^)]*\)\s*=>/.test(commentless);
     if (functionStart) {
-      functionStack.push({ indent });
+      functionIndent = indent;
+    } else if (functionIndent !== null && indent <= functionIndent && trimmed.length > 0) {
+      functionIndent = null;
     }
-    const inFunction = functionStack.length > 0;
+    const inFunction = functionIndent !== null && indent > functionIndent;
 
     if (indent > 0 && indent % 4 !== 0) {
       addIssue(issues, {
@@ -382,16 +382,13 @@ function lintContent(content, config) {
       loopStack.push(indent);
     }
 
-    if (indent === 0) {
-      const varMatch = commentless.match(/^\s*(?:var\s+)?([A-Za-z_]\w*)\s*(?::=|=)/);
-      if (varMatch) {
-        globalVars.add(varMatch[1]);
-      }
+    if (indent === 0 && assignedName) {
+      globalVars.add(assignedName);
     }
 
     if (inFunction) {
       globalVars.forEach((name) => {
-        const assignRegex = new RegExp(`\b${name}\b\s*(?::=|=)`);
+        const assignRegex = new RegExp(`\\b${name}\\b\\s*(?::=|=)`);
         if (assignRegex.test(commentless)) {
           addIssue(issues, {
             line: lineNumber,
@@ -546,9 +543,9 @@ function lintContent(content, config) {
   return issues;
 }
 
-function lintFile(filePath, config) {
-  const issues = [];
-  let content;
+  function lintFile(filePath, config) {
+    const issues = [];
+    let content;
   try {
     content = fs.readFileSync(filePath, 'utf8');
   } catch (err) {
@@ -582,9 +579,10 @@ function lintFile(filePath, config) {
     });
   }
 
-  const mergedConfig = { ...DEFAULT_CONFIG, ...config };
-  return lintContent(content, mergedConfig);
-}
+    const mergedConfig = { ...DEFAULT_CONFIG, ...config };
+    const contentIssues = lintContent(content, mergedConfig);
+    return issues.concat(contentIssues);
+  }
 
 function formatIssues(issues, format, filePath) {
   if (format === 'json') {

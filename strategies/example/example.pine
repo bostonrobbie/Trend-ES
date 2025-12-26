@@ -1,17 +1,55 @@
-//@version=5
-strategy("Example Template Strategy", overlay=true, initial_capital=100000)
+//@version=6
+strategy("Example Limit Timeout", overlay=true, pyramiding=0, process_orders_on_close=true, calc_on_every_tick=false)
 
-length = input.int(20, "MA Length")
-fast = ta.sma(close, length)
-slow = ta.sma(close, length * 2)
+// === Inputs ===
+timeoutBars = input.int(3, "Limit order timeout (bars)", minval=1)
+marketableTicks = input.int(2, "Marketable offset (ticks)", minval=0)
+fastLen = input.int(10, "Fast MA", minval=1)
+slowLen = input.int(30, "Slow MA", minval=1)
 
-longCond = ta.crossover(fast, slow)
-shortCond = ta.crossunder(fast, slow)
+// === Signals ===
+fast = ta.sma(close, fastLen)
+slow = ta.sma(close, slowLen)
+longSignal = barstate.isconfirmed and ta.crossover(fast, slow)
+shortSignal = barstate.isconfirmed and ta.crossunder(fast, slow)
 
-if longCond and strategy.position_size <= 0
-    strategy.entry("Long", strategy.long)
-if shortCond and strategy.position_size >= 0
-    strategy.entry("Short", strategy.short)
+// === Limit prices ===
+tick = syminfo.mintick
+longLimit = close + marketableTicks * tick
+shortLimit = close - marketableTicks * tick
 
-plot(fast, color=color.new(color.green, 0), title="Fast")
-plot(slow, color=color.new(color.red, 0), title="Slow")
+// === Pending tracking ===
+var int pendingLongBar = na
+var int pendingShortBar = na
+
+// === Entries (limit-first) ===
+if longSignal and strategy.position_size <= 0
+    strategy.cancel("S")
+    pendingShortBar := na
+    strategy.entry("L", strategy.long, limit=longLimit)
+    pendingLongBar := bar_index
+
+if shortSignal and strategy.position_size >= 0
+    strategy.cancel("L")
+    pendingLongBar := na
+    strategy.entry("S", strategy.short, limit=shortLimit)
+    pendingShortBar := bar_index
+
+// === Clear pending markers once filled ===
+if strategy.position_size > 0
+    pendingLongBar := na
+if strategy.position_size < 0
+    pendingShortBar := na
+
+// === Timeout cancel for unfilled limits ===
+if strategy.position_size == 0 and not na(pendingLongBar) and (bar_index - pendingLongBar) >= timeoutBars
+    strategy.cancel("L")
+    pendingLongBar := na
+
+if strategy.position_size == 0 and not na(pendingShortBar) and (bar_index - pendingShortBar) >= timeoutBars
+    strategy.cancel("S")
+    pendingShortBar := na
+
+// === Plots ===
+plot(fast, title="Fast MA")
+plot(slow, title="Slow MA")

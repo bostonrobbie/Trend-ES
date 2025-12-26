@@ -1,23 +1,22 @@
 //@version=6
-strategy("Example Limit v6", overlay=true, pyramiding=0, process_orders_on_close=true, calc_on_every_tick=false)
+strategy("Scaffold Demo v6", overlay=true, pyramiding=0, process_orders_on_close=true, calc_on_every_tick=false)
 
-// Pane lock to anchor script without visible plots
 plot(close, title="__pane_lock__", display=display.none)
 
 // === Inputs ===
 sessionInput = input.session("0930-1600", "Session (exchange hours)", "America/New_York")
 useLong = input.bool(true, "Enable Longs")
 useShort = input.bool(true, "Enable Shorts")
-limitOffsetTicks = input.int(3, "Limit offset (ticks)", minval=1)
+limitOffsetTicks = input.int(5, "Limit offset (ticks)", minval=1)
 cancelAfterBars = input.int(3, "Cancel limit after (bars)", minval=1)
-maxTradesPerDay = input.int(2, "Max trades per day", minval=1)
-riskPct = input.float(0.5, "Risk % per trade", minval=0.0, step=0.1)
+maxTradesPerDay = input.int(3, "Max trades per day", minval=1)
+riskPct = input.float(1.0, "Risk % per trade", minval=0.0, step=0.1)
 
-// === Signals + session gating ===
+// === Session + gating ===
 sessionTime = time(timeframe.period, sessionInput, "America/New_York")
 inSession = not na(sessionTime)
 maFast = ta.sma(close, 10)
-maSlow = ta.sma(close, 25)
+maSlow = ta.sma(close, 30)
 longSignal = inSession and ta.crossover(maFast, maSlow)
 shortSignal = inSession and ta.crossunder(maFast, maSlow)
 
@@ -29,9 +28,8 @@ if barstate.isconfirmed and (na(lastDay) or currentDay != lastDay)
     tradesToday := 0
     lastDay := currentDay
 
-// Track order placement for cancel/timeout logic
-var string longOrderId = "example-long-limit"
-var string shortOrderId = "example-short-limit"
+var string longOrderId = "scaffold-demo-long-limit"
+var string shortOrderId = "scaffold-demo-short-limit"
 var int longPlacedBar = na
 var int shortPlacedBar = na
 
@@ -49,7 +47,6 @@ if canShort and shortSignal
     strategy.entry(shortOrderId, strategy.short, limit=shortLimitPrice, comment="limit short")
     shortPlacedBar := bar_index
 
-// Cancel unfilled orders after timeout
 if not na(longPlacedBar) and strategy.position_size <= 0 and bar_index - longPlacedBar >= cancelAfterBars
     strategy.cancel(id=longOrderId)
     longPlacedBar := na
@@ -58,17 +55,14 @@ if not na(shortPlacedBar) and strategy.position_size >= 0 and bar_index - shortP
     strategy.cancel(id=shortOrderId)
     shortPlacedBar := na
 
-// Reset pending markers once a position is filled
 if strategy.position_size != 0
     longPlacedBar := na
     shortPlacedBar := na
 
-// Count trades when position opens to enforce per-day limit
 if barstate.isconfirmed and strategy.position_size != 0 and strategy.position_size[1] == 0
     tradesToday += 1
 
-// === Visuals ===
+riskValue = strategy.equity * (riskPct / 100.0)
 plot(maFast, color=color.new(color.green, 0), title="MA Fast")
 plot(maSlow, color=color.new(color.orange, 0), title="MA Slow")
-riskValue = strategy.equity * (riskPct / 100.0)
 plot(riskValue, title="Risk per trade (display only)", display=display.none)
