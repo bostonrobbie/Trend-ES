@@ -1,0 +1,5 @@
+//@version=6
+strategy("Bad EOL", overlay=true)
+
+value = close +
+plot(value)
