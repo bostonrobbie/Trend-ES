@@ -1,17 +1,49 @@
 //@version=6
 strategy("Example Limit Timeout", overlay=true, pyramiding=0, process_orders_on_close=true, calc_on_every_tick=false)
 
-// === Inputs ===
-timeoutBars = input.int(3, "Limit order timeout (bars)", minval=1)
+// === Time inputs (New York) ===
+entryHour = input.int(11, "Entry Hour (NY)", minval=0, maxval=23)
+entryMinute = input.int(30, "Entry Minute (NY)", minval=0, maxval=59)
+forcedExitHour = input.int(16, "Forced Exit Hour (NY)", minval=0, maxval=23)
+forcedExitMinute = input.int(50, "Forced Exit Minute (NY)", minval=0, maxval=59)
+
+// === Filters ===
+useMomentumFilter = input.bool(true, "Use Momentum Filter?")
+momentumLookback = input.int(145, "Momentum Lookback (bars)", minval=1)
+momentumThresholdLong = input.int(10, "Momentum Threshold (Long)")
+momentumThresholdShort = input.int(25, "Momentum Threshold (Short)")
+useShortAdxFilter = input.bool(true, "Use Short-Side ADX Filter?")
+adxLength = input.int(120, "ADX Length", minval=1)
+adxThresholdShort = input.int(25, "ADX Threshold (Short)")
+longOnlyMode = input.bool(false, "Long-Only Mode")
+
+// === Core parameters ===
 marketableTicks = input.int(2, "Marketable offset (ticks)", minval=0)
 fastLen = input.int(10, "Fast MA", minval=1)
 slowLen = input.int(30, "Slow MA", minval=1)
 
-// === Signals ===
+// === Time handling ===
+nyTime = time(timeframe.period, "America/New_York")
+nyHour = hour(nyTime)
+nyMinute = minute(nyTime)
+nyMinutes = nyHour * 60 + nyMinute
+entryMinutes = entryHour * 60 + entryMinute
+forcedExitMinutes = forcedExitHour * 60 + forcedExitMinute
+
+inEntryWindow = not na(nyTime) and nyMinutes >= entryMinutes and nyMinutes <= forcedExitMinutes
+forceExitNow = not na(nyTime) and nyMinutes >= forcedExitMinutes
+
+// === Indicators ===
 fast = ta.sma(close, fastLen)
 slow = ta.sma(close, slowLen)
-longSignal = barstate.isconfirmed and ta.crossover(fast, slow)
-shortSignal = barstate.isconfirmed and ta.crossunder(fast, slow)
+baseMomentum = close - close[momentumLookback]
+longMomentumOk = not useMomentumFilter or baseMomentum >= momentumThresholdLong
+shortMomentumOk = not useMomentumFilter or baseMomentum <= -momentumThresholdShort
+adxValue = ta.adx(adxLength)
+shortAdxOk = not useShortAdxFilter or adxValue >= adxThresholdShort
+
+longSignal = barstate.isconfirmed and inEntryWindow and ta.crossover(fast, slow) and longMomentumOk
+shortSignal = barstate.isconfirmed and inEntryWindow and ta.crossunder(fast, slow) and shortMomentumOk and shortAdxOk and not longOnlyMode
 
 // === Limit prices ===
 tick = syminfo.mintick
@@ -42,6 +74,7 @@ if strategy.position_size < 0
     pendingShortBar := na
 
 // === Timeout cancel for unfilled limits ===
+timeoutBars = input.int(3, "Limit order timeout (bars)", minval=1)
 if strategy.position_size == 0 and not na(pendingLongBar) and (bar_index - pendingLongBar) >= timeoutBars
     strategy.cancel("L")
     pendingLongBar := na
@@ -49,6 +82,11 @@ if strategy.position_size == 0 and not na(pendingLongBar) and (bar_index - pendi
 if strategy.position_size == 0 and not na(pendingShortBar) and (bar_index - pendingShortBar) >= timeoutBars
     strategy.cancel("S")
     pendingShortBar := na
+
+// === Forced exit ===
+if forceExitNow and strategy.position_size != 0
+    strategy.close("L")
+    strategy.close("S")
 
 // === Plots ===
 plot(fast, title="Fast MA")
