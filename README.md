@@ -7,6 +7,7 @@ Offline, CI-ready template for TradingView Pine Script **v6** strategies. Each s
    ```bash
    npm ci
    ```
+   > Note: the repo ships a tiny local `vitest` stub so installs work fully offline (no vendored `node_modules/`).
 2. Run the linter against all strategies:
    ```bash
    npm run lint:pine

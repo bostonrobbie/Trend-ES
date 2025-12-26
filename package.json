@@ -22,6 +22,6 @@
   "license": "MIT",
   "dependencies": {},
   "devDependencies": {
-    "vitest": "^1.6.0"
+    "vitest": "file:tooling/vitest-stub"
   }
 }
