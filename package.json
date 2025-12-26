@@ -23,5 +23,6 @@
   "dependencies": {},
   "devDependencies": {
     "vitest": "file:tooling/vitest-stub"
+    "vitest": "^1.6.0"
   }
 }

@@ -192,6 +192,7 @@ function lintContent(content, config) {
   let sawStrategyEntry = false;
   const globalVars = new Set();
     let functionIndent = null;
+  const functionStack = [];
   const loopStack = [];
   let previousIndent = 0;
   let previousLineWasBlock = false;
@@ -326,6 +327,8 @@ function lintContent(content, config) {
       trimmed.match(/^([A-Za-z_]\w*)\b\s*(?::=|=)/) || trimmed.match(/^var\s+([A-Za-z_]\w*)\b\s*(?::=|=)/);
     const assignedName = assignMatch ? assignMatch[1] : null;
     if (assignedName && RESERVED_IDENTIFIERS.includes(assignedName) && !/\./.test(trimmed.split(/:=|=/)[0])) {
+    const reservedRegex = new RegExp(`^(?:var\s+)?(${RESERVED_IDENTIFIERS.join('|')})\b\s*(?::=|=)`);
+    if (reservedRegex.test(trimmed) && !/\./.test(trimmed.split(/:=|=/)[0])) {
       addIssue(issues, {
         line: lineNumber,
         col: 1,
@@ -342,6 +345,15 @@ function lintContent(content, config) {
       functionIndent = null;
     }
     const inFunction = functionIndent !== null && indent > functionIndent;
+    while (functionStack.length && indent <= functionStack[functionStack.length - 1].indent) {
+      functionStack.pop();
+    }
+
+    const functionStart = /^\s*[A-Za-z_]\w*\s*\([^)]*\)\s*=>/.test(commentless);
+    if (functionStart) {
+      functionStack.push({ indent });
+    }
+    const inFunction = functionStack.length > 0;
 
     if (indent > 0 && indent % 4 !== 0) {
       addIssue(issues, {
@@ -384,11 +396,17 @@ function lintContent(content, config) {
 
     if (indent === 0 && assignedName) {
       globalVars.add(assignedName);
+    if (indent === 0) {
+      const varMatch = commentless.match(/^\s*(?:var\s+)?([A-Za-z_]\w*)\s*(?::=|=)/);
+      if (varMatch) {
+        globalVars.add(varMatch[1]);
+      }
     }
 
     if (inFunction) {
       globalVars.forEach((name) => {
         const assignRegex = new RegExp(`\\b${name}\\b\\s*(?::=|=)`);
+        const assignRegex = new RegExp(`\b${name}\b\s*(?::=|=)`);
         if (assignRegex.test(commentless)) {
           addIssue(issues, {
             line: lineNumber,
@@ -546,6 +564,9 @@ function lintContent(content, config) {
   function lintFile(filePath, config) {
     const issues = [];
     let content;
+function lintFile(filePath, config) {
+  const issues = [];
+  let content;
   try {
     content = fs.readFileSync(filePath, 'utf8');
   } catch (err) {
@@ -583,6 +604,9 @@ function lintContent(content, config) {
     const contentIssues = lintContent(content, mergedConfig);
     return issues.concat(contentIssues);
   }
+  const mergedConfig = { ...DEFAULT_CONFIG, ...config };
+  return lintContent(content, mergedConfig);
+}
 
 function formatIssues(issues, format, filePath) {
   if (format === 'json') {

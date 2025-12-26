@@ -81,6 +81,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
 - Uploads `pine-lint-report.json` as an artifact and fails on any errors.
 
 ## Creating a new strategy manually
+## Creating a new strategy
 1. Copy `strategies/example_v6` to `strategies/<your_strategy>`.
 2. Update the `.pine` file but keep `//@version=6` on the first non-empty line and ensure the first declaration is `strategy()`/`indicator()`.
 3. Use limit orders with cancel/timeout logic by default to satisfy the linter guardrails.

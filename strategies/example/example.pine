@@ -53,3 +53,20 @@ if strategy.position_size == 0 and not na(pendingShortBar) and (bar_index - pend
 // === Plots ===
 plot(fast, title="Fast MA")
 plot(slow, title="Slow MA")
+//@version=5
+strategy("Example Template Strategy", overlay=true, initial_capital=100000)
+
+length = input.int(20, "MA Length")
+fast = ta.sma(close, length)
+slow = ta.sma(close, length * 2)
+
+longCond = ta.crossover(fast, slow)
+shortCond = ta.crossunder(fast, slow)
+
+if longCond and strategy.position_size <= 0
+    strategy.entry("Long", strategy.long)
+if shortCond and strategy.position_size >= 0
+    strategy.entry("Short", strategy.short)
+
+plot(fast, color=color.new(color.green, 0), title="Fast")
+plot(slow, color=color.new(color.red, 0), title="Slow")

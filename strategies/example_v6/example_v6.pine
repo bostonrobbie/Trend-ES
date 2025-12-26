@@ -72,3 +72,30 @@ plot(maFast, color=color.new(color.green, 0), title="MA Fast")
 plot(maSlow, color=color.new(color.orange, 0), title="MA Slow")
 riskValue = strategy.equity * (riskPct / 100.0)
 plot(riskValue, title="Risk per trade (display only)", display=display.none)
+strategy("Example Limit Strategy v6", overlay=true, calc_on_every_tick=false)
+
+var float longLimit = na
+var float shortLimit = na
+var int timeoutBars = 3
+
+basis = ta.sma(close, 20)
+longSignal = ta.crossover(close, basis)
+shortSignal = ta.crossunder(close, basis)
+
+if barstate.isconfirmed
+    if longSignal and strategy.position_size <= 0
+        longLimit := close - syminfo.mintick * 2
+        strategy.entry("LongLimit", strategy.long, limit=longLimit, comment="limit long")
+    if shortSignal and strategy.position_size >= 0
+        shortLimit := close + syminfo.mintick * 2
+        strategy.entry("ShortLimit", strategy.short, limit=shortLimit, comment="limit short")
+
+entryBarIndex = strategy.opentrades > 0 ? strategy.opentrades.entry_bar_index(strategy.opentrades - 1) : bar_index
+barsSinceEntry = strategy.position_size != 0 ? bar_index - entryBarIndex : 0
+expired = strategy.position_size != 0 and barsSinceEntry > timeoutBars
+
+if expired
+    strategy.cancel(id="LongLimit")
+    strategy.cancel(id="ShortLimit")
+
+plot(basis, title="Basis")
