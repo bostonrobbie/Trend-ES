@@ -1,0 +1,4 @@
+//@version=6
+strategy("Bad Unbalanced", overlay=true)
+
+plot(close
