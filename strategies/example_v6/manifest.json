@@ -1,0 +1,23 @@
+{
+  "name": "example_v6",
+  "version": "1.0.0",
+  "description": "Pine v6 limit-first example with timeout and per-day trade cap",
+  "symbols": ["ES1!"],
+  "timeframes": ["5"],
+  "timezone": "America/New_York",
+  "session": "0930-1600",
+  "orderPolicy": {
+    "entryType": "limit",
+    "marketableOffsetTicks": 3,
+    "timeoutBars": 3
+  },
+  "risk": {
+    "qtyType": "contracts",
+    "qtyValue": 1,
+    "pyramiding": 0
+  },
+  "backtestAssumptions": {
+    "commissionPerContractCash": 2.5,
+    "slippageTicks": 1
+  }
+}

@@ -3,12 +3,17 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { describe, it, expect, afterAll } = require('vitest');
 const { lintFile, DEFAULT_CONFIG } = require('../index');
+const { validateStrategyDir } = require('../../validate-manifests');
 
 const createdDirs = [];
 
 function lintFixture(name, overrides = {}) {
     const filePath = path.join(__dirname, '..', 'fixtures', name);
     return lintFile(filePath, { ...DEFAULT_CONFIG, ...overrides });
+}
+
+function repoRoot() {
+    return path.join(__dirname, '..', '..', '..');
 }
 
 describe('pine-lint fixtures', () => {
@@ -65,23 +70,38 @@ describe('pine-lint fixtures', () => {
     });
 });
 
-describe('new strategy generator', () => {
+describe('strategy scaffolds and manifests', () => {
     afterAll(() => {
         createdDirs.forEach((dir) => {
             fs.rmSync(dir, { recursive: true, force: true });
         });
     });
 
-    it('creates a lint-clean scaffold', () => {
-        const repoRoot = path.join(__dirname, '..', '..', '..');
+    it('creates a lint-clean scaffold with a valid manifest', () => {
+        const root = repoRoot();
         const strategyName = `lint-gen-${Date.now()}`;
-        const strategyDir = path.join(repoRoot, 'strategies', strategyName);
+        const strategyDir = path.join(root, 'strategies', strategyName);
         createdDirs.push(strategyDir);
 
-        execSync(`node tooling/new-strategy/index.js create ${strategyName}`, { cwd: repoRoot, stdio: 'inherit' });
-        const pinePath = path.join(strategyDir, `${strategyName}.pine`);
+        execSync(`node tooling/new-strategy/index.js create ${strategyName}`, { cwd: root, stdio: 'inherit' });
+        const pinePath = path.join(strategyDir, 'strategy.pine');
         const issues = lintFile(pinePath, DEFAULT_CONFIG);
         const errors = issues.filter((i) => i.severity === 'ERROR');
         expect(errors).toHaveLength(0);
+
+        const manifestErrors = validateStrategyDir(strategyDir);
+        expect(manifestErrors).toHaveLength(0);
+    });
+
+    it('validates existing strategy manifests', () => {
+        const root = repoRoot();
+        const strategiesDir = path.join(root, 'strategies');
+        const entries = fs.readdirSync(strategiesDir, { withFileTypes: true }).filter((e) => e.isDirectory());
+
+        entries.forEach((entry) => {
+            const dirPath = path.join(strategiesDir, entry.name);
+            const errors = validateStrategyDir(dirPath);
+            expect(errors).toHaveLength(0);
+        });
     });
 });
