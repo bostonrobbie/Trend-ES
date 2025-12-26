@@ -1,87 +1,85 @@
 # TradingView Pine v6 Strategy Template
 
-Offline, CI-ready template for TradingView Pine Script **v6** strategies. Each strategy lives in its own folder with a single copy/paste-ready `.pine` file, and the bundled `pine-lint` CLI enforces Pine Editor-like rules, limit-order-first discipline, and common compile foot-guns.
+Offline, CI-ready template for TradingView Pine Script **v6** strategies. Each strategy lives in its own folder with a copy/paste-ready `strategy.pine`, a machine-readable manifest, and staging notes.
 
 ## Quickstart
 1. Install dependencies (Node LTS):
    ```bash
    npm ci
    ```
-   > Note: the repo ships a tiny local `vitest` stub so installs work fully offline (no vendored `node_modules/`).
-2. Run the linter against all strategies:
+2. Run all checks (tests + pine-lint + manifest validation):
    ```bash
-   npm run lint:pine
+   npm run check
    ```
-3. Run unit tests (vitest):
-   ```bash
-   npm test
-   ```
-4. Copy `strategies/example_v6/example_v6.pine` into TradingView to start building your own strategy.
+3. Fix any issues reported by the linter/validator before committing.
 
-## Create a new strategy
-Use the scaffold generator to create a Pine v6, limit-order-first strategy folder with a copy/paste-ready `.pine` file:
+> Optional: install the local pre-commit hook to block accidental `node_modules/` or lint reports from being committed:
+> ```bash
+> bash tooling/hooks/install.sh
+> ```
 
-```bash
-node tooling/new-strategy/index.js create <strategy_name>
-# example:
-node tooling/new-strategy/index.js create es-orb-gap
-```
+## Strategy layout
+Every folder under `strategies/<name>/` must contain:
+- `strategy.pine` — Pine v6 script with limit-order-first entries and cancel/timeout logic.
+- `manifest.json` — machine-readable metadata for staging/backtest assumptions.
+- `README.md` — human notes for staging/paper trading and release history.
 
-Rules:
-- Strategy name must use lowercase letters, numbers, and hyphens only.
-- Files are created in `strategies/<strategy_name>/` and will not be overwritten unless you pass `--force`.
-- Generated scripts include bar-close gating, limit order offsets, cancel/timeout handling, per-day trade caps, and a pane-lock plot.
+### Manifest schema
+`manifest.json` must include:
+- `name` (string)
+- `version` (string)
+- `description` (string)
+- `symbols` (string array)
+- `timeframes` (string array)
+- `timezone` (string, e.g., `America/New_York`)
+- `session` (string, e.g., `0930-1600`)
+- `orderPolicy` (object)
+  - `entryType` (must be `limit`)
+  - `marketableOffsetTicks` (integer)
+  - `timeoutBars` (integer)
+- `risk` (object)
+  - `qtyType` (string)
+  - `qtyValue` (number)
+  - `pyramiding` (integer)
+- `backtestAssumptions` (object)
+  - `commissionPerContractCash` (number)
+  - `slippageTicks` (integer)
 
-After generation, edit the strategy, then run:
-```bash
-npm test
-npm run lint:pine
-```
+Run `npm run validate:manifests` to check required keys and types across all strategies.
 
 ## Linter usage
-```
+```bash
 node tooling/pine-lint/index.js lint "strategies/**/*.pine" [--format json] [--config path]
 ```
 - Text output: `file:line:col - [ERROR|WARN] CODE - message`
 - JSON output: array of `{file,line,col,severity,code,message}`
-- Default config: `tooling/pine-lint/index.js` (overrides via `.pinelintrc.json`)
+- Default config: `tooling/pine-lint/index.js` (override via `.pinelintrc.json`)
 
 Key checks include:
 - `//@version=6` on the first non-empty line and exactly one `strategy()`/`indicator()` declaration.
-- Balanced delimiters and end-of-line continuation traps (dangling operators, commas, open delimiters).
-- 4-space indentation heuristics for block scopes.
-- Reserved identifier misuse, global var mutation inside functions, plotting in local scopes.
-- `request.security` lookahead enforcement and repaint warnings.
-- Strategy entry guardrails: limit-order requirement, anti-spam gating heuristics, and cancel/timeout expectations.
-- Overfitting guardrails: input count, nested loops, long argument lists.
+- Limit-order requirement for `strategy.entry` with cancel/timeout expectations.
+- Balanced delimiters, 4-space indentation heuristics, reserved identifier misuse, and repaint guardrails.
 
-## Config overrides
-Create `.pinelintrc.json` in the repo root (or pass `--config`) to override defaults:
-```json
-{
-  "requiredVersion": 6,
-  "disallowLookaheadOn": true,
-  "requireLimitOrders": true,
-  "maxInputs": 40,
-  "maxRequestSecurity": 20,
-  "maxLineLength": 120,
-  "enforceOneInputPerLine": true,
-  "enforceNoTabs": true,
-  "enforce4SpaceIndent": true,
-  "disallowCalcOnEveryTick": true
-}
+## Create a new strategy
+Use the scaffold generator for a Pine v6, limit-order-first starter:
+```bash
+node tooling/new-strategy/index.js create <strategy_name>
 ```
+Outputs `strategies/<strategy_name>/` containing:
+- `strategy.pine` with deterministic `L`/`S` order IDs, limit entries, and cancel/timeout handling.
+- `manifest.json` prefilled with default symbols/timeframes and required schema keys.
+- `README.md` with a staging checklist template.
+
+After generation, edit the files, then run `npm run check`.
 
 ## CI
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
+- Guardrail: fails fast if `node_modules/` is present or tracked.
 - `npm ci`
-- `npm test`
-- `npm run lint:pine`
-- `node tooling/pine-lint/index.js lint "strategies/**/*.pine" --format json > pine-lint-report.json`
-- Uploads `pine-lint-report.json` as an artifact and fails on any errors.
+- `npm run check`
+- Generate `pine-lint-report.json` and upload as an artifact.
 
-## Creating a new strategy manually
-1. Copy `strategies/example_v6` to `strategies/<your_strategy>`.
-2. Update the `.pine` file but keep `//@version=6` on the first non-empty line and ensure the first declaration is `strategy()`/`indicator()`.
-3. Use limit orders with cancel/timeout logic by default to satisfy the linter guardrails.
-4. Run `npm run lint:pine` and `npm test` before committing.
+## Release/versioning guidance
+- Tag format: `strategy/<name>/vX.Y.Z` per strategy folder.
+- Keep changelog notes in each strategy README (or `CHANGELOG.md` inside the folder).
+- Before tagging: ensure `npm run check` is green, manifests are up to date, and staging notes reflect the tested configuration.

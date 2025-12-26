@@ -4,4 +4,5 @@ coverage/
 *.log
 npm-debug.log*
 pine-lint-report.json
+pine-lint-report*.json
 .DS_Store

@@ -8,7 +8,9 @@
   },
   "scripts": {
     "lint:pine": "node tooling/pine-lint/index.js lint \"strategies/**/*.pine\"",
-    "test": "vitest run"
+    "test": "vitest run",
+    "validate:manifests": "node tooling/validate-manifests.js",
+    "check": "npm test && npm run lint:pine && npm run validate:manifests"
   },
   "keywords": [
     "pine",
