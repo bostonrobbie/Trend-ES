@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install dependencies
+        run: npm ci --registry=https://registry.npmjs.org
+      - name: Run tests
+        run: npm test
+      - name: Lint Pine scripts
+        run: npm run lint:pine
+      - name: Generate JSON lint report
+        run: node tooling/pine-lint/index.js lint "strategies/**/*.pine" --format json > pine-lint-report.json
+      - name: Upload lint report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pine-lint-report
+          path: pine-lint-report.json

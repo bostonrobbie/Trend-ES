@@ -1,0 +1,4 @@
+//@version=6
+strategy("Bad Spam Entry", overlay=true)
+
+strategy.entry("SPAM", strategy.long, limit=close)
