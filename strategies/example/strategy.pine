@@ -1,4 +1,4 @@
-//@version=5
+//@version=6
 strategy("Example Limit Timeout", overlay=true, pyramiding=0, process_orders_on_close=true, calc_on_every_tick=false)
 
 // === Time inputs (New York) ===
@@ -43,7 +43,8 @@ adxValue = ta.adx(adxLength)
 shortAdxOk = not useShortAdxFilter or adxValue >= adxThresholdShort
 
 longSignal = barstate.isconfirmed and inEntryWindow and ta.crossover(fast, slow) and longMomentumOk
-shortSignal = barstate.isconfirmed and inEntryWindow and ta.crossunder(fast, slow) and shortMomentumOk and shortAdxOk and not longOnlyMode
+shortSignal = barstate.isconfirmed and inEntryWindow and ta.crossunder(fast, slow) and shortMomentumOk and shortAdxOk
+    and not longOnlyMode
 
 // === Limit prices ===
 tick = syminfo.mintick
