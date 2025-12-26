@@ -1,0 +1,5 @@
+//@version=6
+strategy("Bad Market Entry", overlay=true)
+
+if barstate.isconfirmed
+    strategy.entry("MKT", strategy.long)
