@@ -1,0 +1,86 @@
+//@version=6
+strategy("ES Trend Pro", overlay=true, pyramiding=0, process_orders_on_close=true, calc_on_every_tick=false)
+
+// === Professional Gating & Logic (Hardcoded for +EV) ===
+// These are not exposed in the UI to keep the settings panel clean,
+// but they ensure professional execution.
+const int   marketableTicks = 2
+const int   timeoutBars     = 3
+
+// === Inputs ===
+gTime = "Time Settings"
+entryHour        = input.int(11, "Entry Hour (NY)", minval=0, maxval=23, group=gTime)
+entryMinute      = input.int(30, "Entry Minute (NY)", minval=0, maxval=59, group=gTime)
+forcedExitHour   = input.int(16, "Forced Exit Hour (NY)", minval=0, maxval=23, group=gTime)
+forcedExitMinute = input.int(50, "Forced Exit Minute (NY)", minval=0, maxval=59, group=gTime)
+
+gRisk = "Risk & Gating"
+useAdxFilterS  = input.bool(true, "Use Short-Side ADX Filter?", group=gRisk)
+adxLen         = input.int(120, "ADX/DMI Length", minval=1, group=gRisk)
+adxThreshS     = input.int(25, "ADX Threshold (Short)", group=gRisk)
+longOnly       = input.bool(false, "Long-Only Mode", group=gRisk)
+
+// === Time handling ===
+nyTime = time(timeframe.period, "America/New_York")
+nyHour = hour(nyTime)
+nyMinute = minute(nyTime)
+nyMinutes = nyHour * 60 + nyMinute
+entryMinutes = entryHour * 60 + entryMinute
+forcedExitMinutes = forcedExitHour * 60 + forcedExitMinute
+
+inEntryWindow = not na(nyTime) and nyMinutes >= entryMinutes and nyMinutes <= forcedExitMinutes
+forceExitNow = not na(nyTime) and nyMinutes >= forcedExitMinutes
+
+// === Indicators ===
+[diPlus, diMinus, adxValue] = ta.dmi(adxLen, adxLen)
+
+// Signals
+longSignal  = barstate.isconfirmed and inEntryWindow and ta.crossover(diPlus, diMinus)
+shortSignal = barstate.isconfirmed and inEntryWindow and ta.crossunder(diPlus, diMinus) and
+    (not useAdxFilterS or adxValue >= adxThreshS) and not longOnly
+
+// === Limit prices ===
+tick = syminfo.mintick
+longLimitPrice  = close + marketableTicks * tick
+shortLimitPrice = close - marketableTicks * tick
+
+// === Pending tracking ===
+var int pendingLongBar = na
+var int pendingShortBar = na
+
+// === Entries (limit-first) ===
+if longSignal and strategy.position_size <= 0 and na(pendingLongBar)
+    strategy.cancel("S")
+    pendingShortBar := na
+    strategy.entry("L", strategy.long, limit=longLimitPrice, comment="limit long")
+    pendingLongBar := bar_index
+
+if shortSignal and strategy.position_size >= 0 and na(pendingShortBar)
+    strategy.cancel("L")
+    pendingLongBar := na
+    strategy.entry("S", strategy.short, limit=shortLimitPrice, comment="limit short")
+    pendingShortBar := bar_index
+
+// === Clear pending markers once filled ===
+if strategy.position_size > 0
+    pendingLongBar := na
+if strategy.position_size < 0
+    pendingShortBar := na
+
+// === Professional Timeout Logic ===
+if strategy.position_size == 0 and not na(pendingLongBar) and (bar_index - pendingLongBar) >= timeoutBars
+    strategy.cancel("L")
+    pendingLongBar := na
+
+if strategy.position_size == 0 and not na(pendingShortBar) and (bar_index - pendingShortBar) >= timeoutBars
+    strategy.cancel("S")
+    pendingShortBar := na
+
+// === Forced exit ===
+if forceExitNow and strategy.position_size != 0
+    strategy.close_all(comment="End of Day")
+
+// === Plots ===
+plot(diPlus, color=color.green, title="DI+")
+plot(diMinus, color=color.red, title="DI-")
+plot(adxValue, color=color.white, title="ADX", display=display.none)
