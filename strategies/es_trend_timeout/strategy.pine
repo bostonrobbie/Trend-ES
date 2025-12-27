@@ -35,9 +35,12 @@ forceExitNow = not na(nyTime) and nyMinutes >= forcedExitMinutes
 [diPlus, diMinus, adxValue] = ta.dmi(adxLen, adxLen)
 
 // Signals
-longSignal  = barstate.isconfirmed and inEntryWindow and ta.crossover(diPlus, diMinus)
-shortSignal = barstate.isconfirmed and inEntryWindow and ta.crossunder(diPlus, diMinus) and
-    (not useAdxFilterS or adxValue >= adxThreshS) and not longOnly
+longCross   = ta.crossover(diPlus, diMinus)
+shortCross  = ta.crossunder(diPlus, diMinus)
+shortMiscOk = (not useAdxFilterS or adxValue >= adxThreshS) and not longOnly
+
+longSignal  = barstate.isconfirmed and inEntryWindow and longCross
+shortSignal = barstate.isconfirmed and inEntryWindow and shortCross and shortMiscOk
 
 // === Limit prices ===
 tick = syminfo.mintick
