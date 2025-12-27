@@ -86,4 +86,4 @@ if forceExitNow and strategy.position_size != 0
 // === Plots ===
 plot(diPlus, color=color.green, title="DI+")
 plot(diMinus, color=color.red, title="DI-")
-plot(adxValue, color=color.white, title="ADX", display=display.none)\n
+plot(adxValue, color=color.white, title="ADX", display=display.none)
