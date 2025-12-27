@@ -62,7 +62,7 @@ if shortSignal and strategy.position_size >= 0 and na(pendingShortBar)
     strategy.cancel("L")
     pendingLongBar := na
     strategy.entry("S", strategy.short, limit=shortLimitPrice, comment="limit short")
-    pendingShortBar := bar_index
+    pendingLongBar := bar_index
 
 // === Clear pending markers once filled ===
 if strategy.position_size > 0
@@ -86,4 +86,4 @@ if forceExitNow and strategy.position_size != 0
 // === Plots ===
 plot(diPlus, color=color.green, title="DI+")
 plot(diMinus, color=color.red, title="DI-")
-plot(adxValue, color=color.white, title="ADX", display=display.none)
+plot(adxValue, color=color.white, title="ADX", display=display.none)\n
