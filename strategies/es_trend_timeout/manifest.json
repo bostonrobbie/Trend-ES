@@ -1,0 +1,27 @@
+{
+  "name": "es_trend_pro",
+  "version": "1.1.0",
+  "description": "Refined ES trend strategy with professional-grade limit logic and clean UI. DMI-based signals.",
+  "symbols": [
+    "ES1!"
+  ],
+  "timeframes": [
+    "5"
+  ],
+  "timezone": "America/New_York",
+  "session": "0930-1600",
+  "orderPolicy": {
+    "entryType": "limit",
+    "marketableOffsetTicks": 2,
+    "timeoutBars": 3
+  },
+  "risk": {
+    "qtyType": "contracts",
+    "qtyValue": 1,
+    "pyramiding": 0
+  },
+  "backtestAssumptions": {
+    "commissionPerContractCash": 2.5,
+    "slippageTicks": 1
+  }
+}

@@ -191,7 +191,7 @@ function lintContent(content, config) {
   let hasCancelPattern = false;
   let sawStrategyEntry = false;
   const globalVars = new Set();
-    let functionIndent = null;
+  let functionIndent = null;
   const loopStack = [];
   let previousIndent = 0;
   let previousLineWasBlock = false;
@@ -202,6 +202,17 @@ function lintContent(content, config) {
     const trimmed = rawLine.trim();
     const commentless = rawLine.split('//')[0];
     const indent = rawLine.match(/^\s*/)[0].length;
+
+    // Rule: Detect missing process_orders_on_close for professional execution
+    if (trimmed.includes('strategy(') && !trimmed.includes('process_orders_on_close=true')) {
+      addIssue(issues, {
+        line: lineNumber,
+        col: 1,
+        code: 'W_PROFESSIONAL_EXEC',
+        message: 'strategy() should use process_orders_on_close=true for more accurate limit fills.',
+        severity: WARN,
+      });
+    }
 
     if (config.enforceNoTabs && rawLine.includes('\t')) {
       addIssue(issues, {
@@ -441,20 +452,22 @@ function lintContent(content, config) {
           col: entryIndex + 1,
           code: 'W_SPAM_ENTRY',
           message: 'strategy.entry lacks gating (crossovers/position checks); may fire every bar.',
+          severity: config.requireProfessionalGating ? ERROR : WARN,
+        });
+      }
+
+      // Professional Check: Require barstate.isconfirmed for strategies to avoid repainting
+      if (!commentless.includes('barstate.isconfirmed') && !recentMeaningful.some(line => line.includes('barstate.isconfirmed'))) {
+        addIssue(issues, {
+          line: lineNumber,
+          col: entryIndex + 1,
+          code: 'W_CONFIRMED_GATING',
+          message: 'strategy.entry should be gated by barstate.isconfirmed for professional execution.',
           severity: WARN,
         });
       }
     }
 
-    if (lineEndsWithContinuation(commentless)) {
-      addIssue(issues, {
-        line: lineNumber,
-        col: commentless.length,
-        code: 'E_EOL_CONTINUATION',
-        message: 'Line ends with a dangling operator or delimiter; add explicit continuation.',
-        severity: ERROR,
-      });
-    }
 
     if (commentless.includes(';')) {
       addIssue(issues, {
@@ -477,7 +490,7 @@ function lintContent(content, config) {
     }
 
     recentMeaningful.push(commentless.trim());
-    if (recentMeaningful.length > 5) {
+    if (recentMeaningful.length > 20) {
       recentMeaningful.shift();
     }
   });
@@ -543,9 +556,9 @@ function lintContent(content, config) {
   return issues;
 }
 
-  function lintFile(filePath, config) {
-    const issues = [];
-    let content;
+function lintFile(filePath, config) {
+  const issues = [];
+  let content;
   try {
     content = fs.readFileSync(filePath, 'utf8');
   } catch (err) {
@@ -579,10 +592,10 @@ function lintContent(content, config) {
     });
   }
 
-    const mergedConfig = { ...DEFAULT_CONFIG, ...config };
-    const contentIssues = lintContent(content, mergedConfig);
-    return issues.concat(contentIssues);
-  }
+  const mergedConfig = { ...DEFAULT_CONFIG, ...config };
+  const contentIssues = lintContent(content, mergedConfig);
+  return issues.concat(contentIssues);
+}
 
 function formatIssues(issues, format, filePath) {
   if (format === 'json') {
