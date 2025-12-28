@@ -197,6 +197,9 @@ function lintContent(content, config) {
   let previousLineWasBlock = false;
   const recentMeaningful = [];
 
+  const fullText = lines.join('\n');
+  const hasProfessionalExec = fullText.includes('strategy(') && /strategy\([^)]*process_orders_on_close\s*=\s*true/s.test(fullText);
+
   lines.forEach((rawLine, idx) => {
     const lineNumber = idx + 1;
     const trimmed = rawLine.trim();
@@ -204,7 +207,7 @@ function lintContent(content, config) {
     const indent = rawLine.match(/^\s*/)[0].length;
 
     // Rule: Detect missing process_orders_on_close for professional execution
-    if (trimmed.includes('strategy(') && !trimmed.includes('process_orders_on_close=true')) {
+    if (trimmed.includes('strategy(') && !hasProfessionalExec) {
       addIssue(issues, {
         line: lineNumber,
         col: 1,
@@ -490,7 +493,7 @@ function lintContent(content, config) {
     }
 
     recentMeaningful.push(commentless.trim());
-    if (recentMeaningful.length > 20) {
+    if (recentMeaningful.length > 50) {
       recentMeaningful.shift();
     }
   });

@@ -1,0 +1,140 @@
+//@version=6
+strategy("NQ VWAP Timed Pro",
+    overlay=true,
+    default_qty_type=strategy.fixed,
+    default_qty_value=1,
+    commission_type=strategy.commission.cash_per_contract,
+    commission_value=1.5,
+    slippage=1,
+    process_orders_on_close=true,
+    calc_on_every_tick=false)
+
+// ——— Professional Execution & Logic (Hardcoded) ———
+const int marketableTicks = 2
+const int timeoutBars     = 3
+
+// ——— Inputs ———
+gTime = "Time Settings"
+entryHour      = input.int(8,    "Entry Hour (NY)",         minval=0, maxval=23, group=gTime)
+entryMin       = input.int(40,   "Entry Minute (NY)",       minval=0, maxval=59, group=gTime)
+exitHour       = input.int(14,   "Forced Exit Hour (NY)",   minval=0, maxval=23, group=gTime)
+exitMin        = input.int(10,   "Forced Exit Minute (NY)", minval=0, maxval=59, group=gTime)
+
+gRisk = "Risk & Filters"
+useMom         = input.bool(true,  "Use Momentum Filter?", group=gRisk)
+momLen         = input.int(255,    "Momentum Lookback (bars)", minval=1, group=gRisk)
+momThreshLong  = input.float(30.0, "Momentum Threshold (Long)",  step=0.1, group=gRisk)
+momThreshShort = input.float(20.0, "Momentum Threshold (Short)", step=0.1, group=gRisk)
+
+useLongAdx     = input.bool(true,  "Use Long-Side ADX Filter?", group=gRisk)
+useShortAdx    = input.bool(true,  "Use Short-Side ADX Filter?", group=gRisk)
+adxLen         = input.int(14,     "ADX Length",               minval=1, group=gRisk)
+adxThreshLong  = input.float(25.0, "ADX Threshold (Long)",     step=0.1, group=gRisk)
+adxThreshShort = input.float(25.0, "ADX Threshold (Short)",    step=0.1, group=gRisk)
+longOnlyMode   = input.bool(false, "Long-Only Mode", group=gRisk)
+
+gCap = "Pre-Entry Risk Cap"
+useDistATR     = input.bool(true,   "Skip if |Price−VWAP| > k·ATR?", group=gCap)
+maxDistATR     = input.float(1.25,  "k (ATR multiples)",              group=gCap, step=0.05)
+useRiskUSD     = input.bool(false,  "Also cap by $ risk to VWAP?",    group=gCap)
+maxRiskUSD     = input.float(2500,  "Max $ risk to VWAP (1 contract)",group=gCap, step=50)
+
+// ——— NY-localized time ———
+nyTime = time(timeframe.period, "America/New_York")
+nyHour = hour(nyTime)
+nyMin  = minute(nyTime)
+
+// ——— Indicators ———
+vwapVal = ta.vwap
+momVal  = ta.mom(close, momLen)
+[plusDI, minusDI, adxVal] = ta.dmi(adxLen, adxLen)
+atrVal  = ta.atr(14)
+
+// ——— State ———
+var bool tradedToday = false
+
+// Reset at NY midnight
+if ta.change(time("D", "America/New_York")) != 0
+    tradedToday := false
+
+// ——— Pre-compute distance/risk ———
+distToVWAP  = math.abs(close - vwapVal)
+distOK_ATR  = not useDistATR or distToVWAP <= maxDistATR * atrVal
+estRiskUSD  = distToVWAP * syminfo.pointvalue
+distOK_USD  = not useRiskUSD or estRiskUSD <= maxRiskUSD
+entryRiskOK = distOK_ATR and distOK_USD
+
+// ——— Signal Logic ———
+isEntryBar = not tradedToday and nyHour == entryHour and nyMin == entryMin and barstate.isconfirmed
+
+longCond  = close > vwapVal
+shortCond = close < vwapVal
+
+momLongOK  = not useMom or momVal >  momThreshLong
+momShortOK = not useMom or momVal < -momThreshShort
+
+longAdxOK  = not useLongAdx  or (adxVal > adxThreshLong  and plusDI  > minusDI)
+shortAdxOK = not useShortAdx or (adxVal > adxThreshShort and minusDI > plusDI)
+
+longSignal  = isEntryBar and longCond and momLongOK and longAdxOK and entryRiskOK
+shortSignal = isEntryBar and not longOnlyMode and shortCond and momShortOK and shortAdxOK and entryRiskOK
+
+// ——— Limit Price Calculation ———
+tick = syminfo.mintick
+longLimitPrice  = close + marketableTicks * tick
+shortLimitPrice = close - marketableTicks * tick
+
+// ——— Order Tracking ———
+var int pendingLongBar  = na
+var int pendingShortBar = na
+
+// ——— Entries ———
+if longSignal and strategy.position_size <= 0 and na(pendingLongBar)
+    strategy.cancel("S")
+    pendingShortBar := na
+    strategy.entry("L", strategy.long, limit=longLimitPrice, comment="VWAP Long Limit")
+    pendingLongBar := bar_index
+    tradedToday := true
+
+if shortSignal and strategy.position_size >= 0 and na(pendingShortBar)
+    strategy.cancel("L")
+    pendingLongBar := na
+    strategy.entry("S", strategy.short, limit=shortLimitPrice, comment="VWAP Short Limit")
+    pendingShortBar := bar_index
+    tradedToday := true
+
+// ——— Clear pending markers ———
+if strategy.position_size > 0
+    pendingLongBar := na
+if strategy.position_size < 0
+    pendingShortBar := na
+
+// ——— Professional Timeout Logic ———
+if strategy.position_size == 0 and not na(pendingLongBar) and (bar_index - pendingLongBar) >= timeoutBars
+    strategy.cancel("L")
+    pendingLongBar := na
+
+if strategy.position_size == 0 and not na(pendingShortBar) and (bar_index - pendingShortBar) >= timeoutBars
+    strategy.cancel("S")
+    pendingShortBar := na
+
+// ——— Exit Logic ———
+if strategy.position_size > 0 and close < vwapVal and barstate.isconfirmed
+    strategy.close("L", comment="VWAP Exit")
+if strategy.position_size < 0 and close > vwapVal and barstate.isconfirmed
+    strategy.close("S", comment="VWAP Exit")
+
+// Forced EOD exit
+isExitBar = nyHour == exitHour and nyMin == exitMin and barstate.isconfirmed
+if strategy.position_size != 0 and isExitBar
+    strategy.close_all("EOD Exit")
+
+// ——— Visuals ———
+plot(vwapVal, title="VWAP", color=color.orange, linewidth=2)
+showAdx = useLongAdx or useShortAdx
+plot(showAdx ? adxVal : na, title="ADX", color=color.purple, display=display.none)
+
+// Mark blocked entries
+blockedEntry = isEntryBar and not entryRiskOK
+plotshape(blockedEntry, title="Blocked (Too far from VWAP)",
+    style=shape.xcross, color=color.red, size=size.tiny, text="dist cap")

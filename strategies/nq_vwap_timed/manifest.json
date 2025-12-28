@@ -1,0 +1,28 @@
+{
+    "name": "nq_vwap_timed",
+    "version": "1.0.0",
+    "description": "NQ VWAP Timed Pro: VWAP-based entry for NQ with professional limit logic, ADX/Momentum filters, and pre-entry risk distance cap.",
+    "symbols": [
+        "NQ1!",
+        "MNQ1!"
+    ],
+    "timeframes": [
+        "1"
+    ],
+    "timezone": "America/New_York",
+    "session": "0830-1615",
+    "orderPolicy": {
+        "entryType": "limit",
+        "marketableOffsetTicks": 2,
+        "timeoutBars": 3
+    },
+    "risk": {
+        "qtyType": "contracts",
+        "qtyValue": 1,
+        "pyramiding": 0
+    },
+    "backtestAssumptions": {
+        "commissionPerContractCash": 1.5,
+        "slippageTicks": 1
+    }
+}
