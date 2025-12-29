@@ -51,7 +51,10 @@ momVal  = ta.mom(close, momLen)
 atrVal  = ta.atr(14)
 
 // ——— State ———
+// Grouping all state variables here to avoid scope issues
 var bool tradedToday = false
+var int pendingLongBar  = na
+var int pendingShortBar = na
 
 // Reset at NY midnight
 if ta.change(time("D", "America/New_York")) != 0
@@ -83,10 +86,6 @@ shortSignal = isEntryBar and not longOnlyMode and shortCond and momShortOK and s
 tick = syminfo.mintick
 longLimitPrice  = close + marketableTicks * tick
 shortLimitPrice = close - marketableTicks * tick
-
-// ——— Order Tracking ———
-var int pendingLongBar  = na
-var int pendingShortBar = na
 
 // ——— Entries ———
 if longSignal and strategy.position_size <= 0 and na(pendingLongBar)
