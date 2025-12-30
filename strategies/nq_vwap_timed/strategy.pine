@@ -1,5 +1,5 @@
 //@version=6
-strategy("NQ VWAP Timed Pro",
+strategy("NQ VWAP Trend Pullback",
     overlay=true,
     default_qty_type=strategy.fixed,
     default_qty_value=1,
@@ -9,106 +9,118 @@ strategy("NQ VWAP Timed Pro",
     process_orders_on_close=true,
     calc_on_every_tick=false)
 
-// ——— Professional Execution & Logic (Hardcoded) ———
+// ——— Professional Execution (Hardcoded) ———
 const int marketableTicks = 2
 const int timeoutBars     = 3
 
 // ——— Inputs ———
-gTime = "Time Settings"
-entryHour      = input.int(8,    "Entry Hour (NY)",         minval=0, maxval=23, group=gTime)
-entryMin       = input.int(40,   "Entry Minute (NY)",       minval=0, maxval=59, group=gTime)
-exitHour       = input.int(14,   "Forced Exit Hour (NY)",   minval=0, maxval=23, group=gTime)
-exitMin        = input.int(10,   "Forced Exit Minute (NY)", minval=0, maxval=59, group=gTime)
+gFilter = "Trend Filters"
+macroLen       = input.int(200,    "Macro Trend EMA",          minval=1, group=gFilter)
+useRejection   = input.bool(true,  "Require Candle Rejection?", group=gFilter,
+    tooltip="Requires Green Close (Long) or Red Close (Short)")
 
-gRisk = "Risk & Filters"
-useMom         = input.bool(true,  "Use Momentum Filter?", group=gRisk)
-momLen         = input.int(255,    "Momentum Lookback (bars)", minval=1, group=gRisk)
-momThreshLong  = input.float(30.0, "Momentum Threshold (Long)",  step=0.1, group=gRisk)
-momThreshShort = input.float(20.0, "Momentum Threshold (Short)", step=0.1, group=gRisk)
+gRisk = "Risk Management"
+atrLen         = input.int(14,     "ATR Length",               minval=1, group=gRisk)
+slMult         = input.float(2.0,  "Initial Stop (ATR x)",     step=0.1, group=gRisk)
+tpMult         = input.float(4.0,  "Take Profit (ATR x)",      step=0.1, group=gRisk)
+useTrailing    = input.bool(true,  "Use Trailing Stop?",       group=gRisk)
+trailAct       = input.float(1.5,  "Trail Activation (ATR x)", step=0.1, group=gRisk)
+trailOffset    = input.float(1.5,  "Trail Offset (ATR x)",     step=0.1, group=gRisk)
 
-useLongAdx     = input.bool(true,  "Use Long-Side ADX Filter?", group=gRisk)
-useShortAdx    = input.bool(true,  "Use Short-Side ADX Filter?", group=gRisk)
-adxLen         = input.int(14,     "ADX Length",               minval=1, group=gRisk)
-adxThreshLong  = input.float(25.0, "ADX Threshold (Long)",     step=0.1, group=gRisk)
-adxThreshShort = input.float(25.0, "ADX Threshold (Short)",    step=0.1, group=gRisk)
-longOnlyMode   = input.bool(false, "Long-Only Mode", group=gRisk)
-
-gCap = "Pre-Entry Risk Cap"
-useDistATR     = input.bool(true,   "Skip if |Price−VWAP| > k·ATR?", group=gCap)
-maxDistATR     = input.float(1.25,  "k (ATR multiples)",              group=gCap, step=0.05)
-useRiskUSD     = input.bool(false,  "Also cap by $ risk to VWAP?",    group=gCap)
-maxRiskUSD     = input.float(2500,  "Max $ risk to VWAP (1 contract)",group=gCap, step=50)
+gTime = "Session"
+startHour      = input.int(9,      "Session Start Hour (NY)",  minval=0, maxval=23, group=gTime)
+startMin       = input.int(30,     "Session Start Min (NY)",   minval=0, maxval=59, group=gTime)
+endHour        = input.int(15,     "Session End Hour (NY)",    minval=0, maxval=23, group=gTime)
+endMin         = input.int(55,     "Session End Min (NY)",     minval=0, maxval=59, group=gTime)
 
 // ——— NY-localized time ———
 nyTime = time(timeframe.period, "America/New_York")
 nyHour = hour(nyTime)
 nyMin  = minute(nyTime)
+timeVal = nyHour * 100 + nyMin
+startTime = startHour * 100 + startMin
+endTime   = endHour * 100 + endMin
+inSession = timeVal >= startTime and timeVal < endTime
 
 // ——— Indicators ———
 vwapVal = ta.vwap
-momVal  = ta.mom(close, momLen)
-[plusDI, minusDI, adxVal] = ta.dmi(adxLen, adxLen)
-atrVal  = ta.atr(14)
+macroTrend = ta.ema(close, macroLen)
+atrVal  = ta.atr(atrLen)
 
 // ——— State ———
-// Grouping all state variables here to avoid scope issues
-var bool tradedToday = false
 var int pendingLongBar  = na
 var int pendingShortBar = na
 
-// Reset at NY midnight
-if ta.change(time("D", "America/New_York")) != 0
-    tradedToday := false
-
-// ——— Pre-compute distance/risk ———
-distToVWAP  = math.abs(close - vwapVal)
-distOK_ATR  = not useDistATR or distToVWAP <= maxDistATR * atrVal
-estRiskUSD  = distToVWAP * syminfo.pointvalue
-distOK_USD  = not useRiskUSD or estRiskUSD <= maxRiskUSD
-entryRiskOK = distOK_ATR and distOK_USD
-
 // ——— Signal Logic ———
-isEntryBar = not tradedToday and nyHour == entryHour and nyMin == entryMin and barstate.isconfirmed
+// 1. Macro Filter: Price relative to 200 EMA
+isBullishTrend = close > macroTrend
+isBearishTrend = close < macroTrend
 
-longCond  = close > vwapVal
-shortCond = close < vwapVal
+// 2. Value Pullback: Price touches/tests VWAP
+// Long: Low dips below or touches VWAP, but we close above it
+// Short: High pops above or touches VWAP, but we close below it
+retestLong  = low <= vwapVal and close > vwapVal
+retestShort = high >= vwapVal and close < vwapVal
 
-momLongOK  = not useMom or momVal >  momThreshLong
-momShortOK = not useMom or momVal < -momThreshShort
+// 3. Trigger: Rejection Candle (Color match)
+rejectionLong  = not useRejection or close > open
+rejectionShort = not useRejection or close < open
 
-longAdxOK  = not useLongAdx  or (adxVal > adxThreshLong  and plusDI  > minusDI)
-shortAdxOK = not useShortAdx or (adxVal > adxThreshShort and minusDI > plusDI)
+// Combined Signal
+validLong  = inSession and isBullishTrend and retestLong and rejectionLong and barstate.isconfirmed
+validShort = inSession and isBearishTrend and retestShort and rejectionShort and barstate.isconfirmed
 
-longSignal  = isEntryBar and longCond and momLongOK and longAdxOK and entryRiskOK
-shortSignal = isEntryBar and not longOnlyMode and shortCond and momShortOK and shortAdxOK and entryRiskOK
-
-// ——— Limit Price Calculation ———
+// ——— Limit Price ———
 tick = syminfo.mintick
-longLimitPrice  = close + marketableTicks * tick
-shortLimitPrice = close - marketableTicks * tick
+limitLong  = close + marketableTicks * tick
+limitShort = close - marketableTicks * tick
 
-// ——— Entries ———
-if longSignal and strategy.position_size <= 0 and na(pendingLongBar)
-    strategy.cancel("S")
-    pendingShortBar := na
-    strategy.entry("L", strategy.long, limit=longLimitPrice, comment="VWAP Long Limit")
+// ——— Execution: Entry ———
+if validLong and strategy.position_size == 0 and na(pendingLongBar)
+    strategy.entry("L", strategy.long, limit=limitLong, comment="Trend Pullback")
     pendingLongBar := bar_index
-    tradedToday := true
 
-if shortSignal and strategy.position_size >= 0 and na(pendingShortBar)
-    strategy.cancel("L")
-    pendingLongBar := na
-    strategy.entry("S", strategy.short, limit=shortLimitPrice, comment="VWAP Short Limit")
+if validShort and strategy.position_size == 0 and na(pendingShortBar)
+    strategy.entry("S", strategy.short, limit=limitShort, comment="Trend Pullback")
     pendingShortBar := bar_index
-    tradedToday := true
 
-// ——— Clear pending markers ———
-if strategy.position_size > 0
+// ——— Execution: Management (ATR Stops/Targets) ———
+if strategy.position_size != 0
+    // Reset pending flags if we are in a trade
     pendingLongBar := na
-if strategy.position_size < 0
     pendingShortBar := na
 
-// ——— Professional Timeout Logic ———
+    float exitStop = na
+    float exitTarget = na
+
+    // Calculate Stop/Target based on AVG Entry Price and current ATR
+    if strategy.position_size > 0
+        exitStop   := strategy.position_avg_price - (atrVal * slMult)
+        exitTarget := strategy.position_avg_price + (atrVal * tpMult)
+    else
+        exitStop   := strategy.position_avg_price + (atrVal * slMult)
+        exitTarget := strategy.position_avg_price - (atrVal * tpMult)
+
+    // Hard Stop / Hard Target
+    strategy.exit("Exit L", "L", stop=exitStop, limit=exitTarget, comment_loss="SL", comment_profit="TP")
+    strategy.exit("Exit S", "S", stop=exitStop, limit=exitTarget, comment_loss="SL", comment_profit="TP")
+
+    // Custom Trailing Implementation
+    if useTrailing and strategy.position_size > 0
+        float activLevel = strategy.position_avg_price + (atrVal * trailAct)
+        if high > activLevel
+            float newStop = high - (atrVal * trailOffset)
+            if newStop > exitStop
+                strategy.exit("Trail L", "L", stop=newStop, comment="Trail")
+
+    if useTrailing and strategy.position_size < 0
+        float activLevel = strategy.position_avg_price - (atrVal * trailAct)
+        if low < activLevel
+            float newStop = low + (atrVal * trailOffset)
+            if newStop < exitStop
+                strategy.exit("Trail S", "S", stop=newStop, comment="Trail")
+
+// ——— Timeout Logic (Cancel Waiting Orders) ———
 if strategy.position_size == 0 and not na(pendingLongBar) and (bar_index - pendingLongBar) >= timeoutBars
     strategy.cancel("L")
     pendingLongBar := na
@@ -117,23 +129,15 @@ if strategy.position_size == 0 and not na(pendingShortBar) and (bar_index - pend
     strategy.cancel("S")
     pendingShortBar := na
 
-// ——— Exit Logic ———
-if strategy.position_size > 0 and close < vwapVal and barstate.isconfirmed
-    strategy.close("L", comment="VWAP Exit")
-if strategy.position_size < 0 and close > vwapVal and barstate.isconfirmed
-    strategy.close("S", comment="VWAP Exit")
-
-// Forced EOD exit
-isExitBar = nyHour == exitHour and nyMin == exitMin and barstate.isconfirmed
-if strategy.position_size != 0 and isExitBar
-    strategy.close_all("EOD Exit")
+// ——— Forced EOD Exit ———
+if nyHour >= endHour and nyMin >= endMin
+    strategy.close_all(comment="EOD")
+    pendingLongBar := na
+    pendingShortBar := na
 
 // ——— Visuals ———
-plot(vwapVal, title="VWAP", color=color.orange, linewidth=2)
-showAdx = useLongAdx or useShortAdx
-plot(showAdx ? adxVal : na, title="ADX", color=color.purple, display=display.none)
+plot(macroTrend, "Macro Trend (200 EMA)", color=color.blue, linewidth=2)
+plot(vwapVal,    "VWAP",                  color=color.orange, linewidth=2)
 
-// Mark blocked entries
-blockedEntry = isEntryBar and not entryRiskOK
-plotshape(blockedEntry, title="Blocked (Too far from VWAP)",
-    style=shape.xcross, color=color.red, size=size.tiny, text="dist cap")
+// Color background to show "Trend Regime"
+bgcolor(isBullishTrend ? color.new(color.green, 95) : isBearishTrend ? color.new(color.red, 95) : na)
